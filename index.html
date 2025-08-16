@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guitar Tab Editor</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Guitar Tab Editor</h1>
+            <div class="controls">
+                <div class="control-group">
+                    <label for="column-spacing">Column Spacing:</label>
+                    <input type="number" id="column-spacing" min="1" max="10" value="2">
+                </div>
+                <div class="control-group">
+                    <label for="line-width">Line Width:</label>
+                    <input type="number" id="line-width" min="40" max="120" value="72">
+                </div>
+                <button id="copy-btn">Copy to Clipboard</button>
+                <button id="clear-btn">Clear All</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="instructions">
+                <p><strong>Navigation:</strong> ← → move columns | ↑ ↓ change strings | Space: up + right | 0-9: enter frets | Backspace: delete</p>
+            </div>
+            
+            <div id="tab-display" class="tab-display" tabindex="0"></div>
+            
+            <textarea id="clipboard-helper" aria-hidden="true"></textarea>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
