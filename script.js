@@ -256,9 +256,7 @@ class GuitarTabEditor {
             const line = lines[i];
             
             if (line === '') {
-                displayLines.push('<span class="tab-line"></span>');
-                stringInStave = 0;
-                staveIndex++;
+                displayLines.push('<span class="tab-line"> </span>');
                 continue;
             }
             
@@ -304,6 +302,7 @@ class GuitarTabEditor {
             stringInStave++;
             if (stringInStave === 6) {
                 stringInStave = 0;
+                staveIndex++;
             }
         }
         
