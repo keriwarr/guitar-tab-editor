@@ -122,6 +122,7 @@ class GuitarTabEditor {
     moveLeft() {
         if (this.currentColumn > 0) {
             this.currentColumn--;
+            this.cleanupEmptyColumns();
         }
     }
     
@@ -173,6 +174,28 @@ class GuitarTabEditor {
         }
     }
     
+    cleanupEmptyColumns() {
+        // Remove empty columns to the right of the cursor
+        while (this.data.length > this.currentColumn + 1) {
+            const lastCol = this.data[this.data.length - 1];
+            if (this.isColumnEmpty(lastCol)) {
+                this.data.pop();
+            } else {
+                break;
+            }
+        }
+    }
+    
+    isColumnEmpty(column) {
+        if (!column) return true;
+        for (let stringIdx = 0; stringIdx < 6; stringIdx++) {
+            if (column[stringIdx] && column[stringIdx].length > 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
     clearAll() {
         this.data = [[]];
         this.currentColumn = 0;
@@ -183,47 +206,73 @@ class GuitarTabEditor {
     
     formatTab() {
         const lines = [];
+        this.cursorInfo = null; // Track cursor position info
         let currentLineStart = 0;
+        let staveIndex = 0;
         
         while (currentLineStart < this.data.length || currentLineStart === 0) {
             const lineStrings = [];
             let lineEndCol = currentLineStart;
+            const staveData = { startCol: currentLineStart, lines: [] };
+            
+            let staveWasTruncated = false; // Track if this stave broke due to width
             
             for (let stringIdx = 0; stringIdx < 6; stringIdx++) {
                 let line = this.strings[stringIdx] + '|--';
                 let colPosition = 4;
+                let lastProcessedCol = currentLineStart - 1;
                 
                 for (let col = currentLineStart; col < this.data.length; col++) {
                     const note = (this.data[col] && this.data[col][stringIdx]) || '';
                     const noteDisplay = note || '-';
                     
-                    const isLastCol = col === this.data.length - 1;
-                    const nextColHasData = col + 1 < this.data.length;
+                    // Track cursor position if this is the current column and string
+                    if (col === this.currentColumn && stringIdx === this.currentString) {
+                        this.cursorInfo = {
+                            staveIndex,
+                            stringIndex: stringIdx,
+                            charStart: colPosition,
+                            charEnd: colPosition + noteDisplay.length
+                        };
+                    }
+                    
+                    const isLastColInData = col === this.data.length - 1;
                     
                     let spacingNeeded;
-                    if (isLastCol) {
+                    if (isLastColInData) {
                         spacingNeeded = Math.max(0, 2 - (noteDisplay.length - 1));
-                    } else if (nextColHasData) {
-                        spacingNeeded = Math.max(0, this.columnSpacing - (noteDisplay.length - 1));
                     } else {
-                        spacingNeeded = 2;
+                        spacingNeeded = Math.max(0, this.columnSpacing - (noteDisplay.length - 1));
                     }
                     
                     const segment = noteDisplay + '-'.repeat(spacingNeeded);
                     
-                    if (colPosition + noteDisplay.length > this.lineWidth && col > currentLineStart) {
+                    if (colPosition + segment.length > this.lineWidth && col > currentLineStart) {
+                        if (stringIdx === 0) {
+                            staveWasTruncated = true;
+                        }
                         break;
                     }
                     
                     line += segment;
-                    colPosition += this.columnSpacing + 1;
+                    colPosition += segment.length;
+                    lastProcessedCol = col;
                     
                     if (stringIdx === 0) {
                         lineEndCol = col + 1;
                     }
                 }
                 
+                // Only pad to full width if this stave was truncated due to line width
+                if (staveWasTruncated) {
+                    const paddingNeeded = this.lineWidth - line.length;
+                    if (paddingNeeded > 0) {
+                        line += '-'.repeat(paddingNeeded);
+                    }
+                }
+                
                 lineStrings.push(line);
+                staveData.lines.push(line);
             }
             
             lines.push(...lineStrings);
@@ -238,6 +287,8 @@ class GuitarTabEditor {
             if (this.data.length === 0) {
                 break;
             }
+            
+            staveIndex++;
         }
         
         return lines.join('\n');
@@ -249,7 +300,6 @@ class GuitarTabEditor {
         const displayLines = [];
         
         let staveIndex = 0;
-        let staveStartCol = 0;
         let stringInStave = 0;
         
         for (let i = 0; i < lines.length; i++) {
@@ -260,36 +310,15 @@ class GuitarTabEditor {
                 continue;
             }
             
-            if (stringInStave === 0) {
-                staveStartCol = this.getStaveStartColumn(staveIndex);
-            }
+            // Check if this line should show the cursor
+            const shouldShowCursor = this.cursorInfo && 
+                                   staveIndex === this.cursorInfo.staveIndex && 
+                                   stringInStave === this.cursorInfo.stringIndex;
             
-            const isCurrentString = stringInStave === this.currentString;
-            const isCurrentStave = this.isColumnInStave(this.currentColumn, staveIndex);
-            
-            if (isCurrentString && isCurrentStave) {
-                const relativeCol = this.currentColumn - staveStartCol;
-                let charPos = 4;
-                
-                for (let col = 0; col < relativeCol; col++) {
-                    const actualCol = staveStartCol + col;
-                    const note = (this.data[actualCol] && this.data[actualCol][stringInStave]) || '-';
-                    const noteWidth = note.length === 2 ? 2 : 1;
-                    
-                    charPos += 1;
-                    if (noteWidth === 2) {
-                        charPos += 1;
-                    }
-                    charPos += Math.max(0, this.columnSpacing - (noteWidth - 1));
-                }
-                
-                const noteContent = (this.data[this.currentColumn] && 
-                    this.data[this.currentColumn][stringInStave]) || '';
-                const noteLength = noteContent.length || 1;
-                
-                const beforeCursor = line.substring(0, charPos);
-                const cursorPart = line.substring(charPos, charPos + noteLength);
-                const afterCursor = line.substring(charPos + noteLength);
+            if (shouldShowCursor) {
+                const beforeCursor = line.substring(0, this.cursorInfo.charStart);
+                const cursorPart = line.substring(this.cursorInfo.charStart, this.cursorInfo.charEnd);
+                const afterCursor = line.substring(this.cursorInfo.charEnd);
                 
                 displayLines.push('<span class="tab-line">' + 
                     beforeCursor + 
@@ -309,53 +338,6 @@ class GuitarTabEditor {
         this.display.innerHTML = displayLines.join('');
     }
     
-    getColumnsPerLine() {
-        return Math.floor((this.lineWidth - 4) / (this.columnSpacing + 1));
-    }
-    
-    getStaveStartColumn(staveIndex) {
-        let col = 0;
-        for (let i = 0; i < staveIndex; i++) {
-            const columnsInStave = this.getColumnsForStave(i);
-            col += columnsInStave;
-        }
-        return col;
-    }
-    
-    getColumnsForStave(staveIndex) {
-        const startCol = this.getStaveStartColumn(staveIndex);
-        let count = 0;
-        let width = 4;
-        
-        for (let col = startCol; col < this.data.length; col++) {
-            const maxNoteWidth = this.getMaxNoteWidth(col);
-            const neededWidth = maxNoteWidth + (count > 0 ? this.columnSpacing : 0);
-            
-            if (width + neededWidth > this.lineWidth && count > 0) {
-                break;
-            }
-            
-            width += neededWidth;
-            count++;
-        }
-        
-        return count || 1;
-    }
-    
-    getMaxNoteWidth(col) {
-        let max = 1;
-        for (let stringIdx = 0; stringIdx < 6; stringIdx++) {
-            const note = (this.data[col] && this.data[col][stringIdx]) || '';
-            max = Math.max(max, note.length || 1);
-        }
-        return max;
-    }
-    
-    isColumnInStave(col, staveIndex) {
-        const startCol = this.getStaveStartColumn(staveIndex);
-        const columnsInStave = this.getColumnsForStave(staveIndex);
-        return col >= startCol && col < startCol + columnsInStave;
-    }
     
     copyToClipboard() {
         const tabText = this.formatTab();
